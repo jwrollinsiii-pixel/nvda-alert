@@ -1,0 +1,44 @@
+name: NVDA alert
+
+on:
+  schedule:
+    # Every 10 minutes, Monday to Friday, 13:00-21:59 UTC (covers US market hours
+    # all year; the script skips itself when the market is closed).
+    - cron: "*/10 13-21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      send_test:
+        description: "Send a test alert to my phone instead of checking NVDA"
+        type: boolean
+        default: false
+
+concurrency:
+  group: nvda-alert
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # lets the agent save its notebook (state.json)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check NVDA
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEXTBELT_KEY: ${{ secrets.TEXTBELT_KEY }}
+          TEXTBELT_PHONE: ${{ secrets.TEXTBELT_PHONE }}
+          SEND_TEST: ${{ github.event.inputs.send_test }}
+        run: python3 check_nvda.py
+
+      - name: Save the notebook
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name "nvda-alert-bot"
+            git config user.email "nvda-alert-bot@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update alert state"
+            git push
+          fi
